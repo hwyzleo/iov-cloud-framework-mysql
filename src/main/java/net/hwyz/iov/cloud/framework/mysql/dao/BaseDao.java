@@ -51,6 +51,14 @@ public interface BaseDao<T, ID> {
     int physicalDeletePo(ID id);
 
     /**
+     * 批量物理删除数据
+     *
+     * @param ids id数组
+     * @return 影响行数
+     */
+    int batchPhysicalDeletePo(Long[] ids);
+
+    /**
      * 根据主键获取对应数据
      *
      * @param id 主键
