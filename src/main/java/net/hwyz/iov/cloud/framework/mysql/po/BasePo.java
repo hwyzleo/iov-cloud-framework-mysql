@@ -55,7 +55,7 @@ public class BasePo {
      * 记录是否有效
      */
     @TableField("row_valid")
-    @TableLogic
+    @TableLogic(value = "1", delval = "0")
     private Boolean rowValid;
 
 }
