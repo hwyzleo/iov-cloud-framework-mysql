@@ -50,12 +50,12 @@ public class BasePo {
      */
     @TableField("row_version")
     @Version
-    private Integer rowVersion;
+    private Integer rowVersion = 1;
     /**
      * 记录是否有效
      */
     @TableField("row_valid")
     @TableLogic(value = "1", delval = "0")
-    private Boolean rowValid;
+    private Boolean rowValid = true;
 
 }
