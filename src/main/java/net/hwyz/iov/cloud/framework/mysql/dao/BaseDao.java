@@ -1,5 +1,7 @@
 package net.hwyz.iov.cloud.framework.mysql.dao;
 
+import org.apache.ibatis.annotations.Param;
+
 import java.util.List;
 import java.util.Map;
 
@@ -56,7 +58,7 @@ public interface BaseDao<T, ID> {
      * @param ids id数组
      * @return 影响行数
      */
-    int batchPhysicalDeletePo(Long[] ids);
+    int batchPhysicalDeletePo(@Param("array") Long[] ids);
 
     /**
      * 根据主键获取对应数据
