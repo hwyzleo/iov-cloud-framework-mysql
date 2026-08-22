@@ -1,1 +1,2 @@
 net.hwyz.iov.cloud.framework.mysql.config.MyBatisPlusConfig
+net.hwyz.iov.cloud.framework.mysql.config.MyBatisMetaObjectHandler
