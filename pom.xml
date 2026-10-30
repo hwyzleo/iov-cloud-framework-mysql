@@ -16,6 +16,8 @@
     <version>0.0.1-SNAPSHOT</version>
 
     <properties>
+        <!-- 默认不强制 MySQL 集成测试；激活 mysql-integration profile 时置为 true，缺失/不可用则 FAIL 而非跳过 -->
+        <mysql.integration.required>false</mysql.integration.required>
     </properties>
 
     <dependencies>
@@ -59,5 +61,31 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- parent 全局 surefire skip=true，本模块覆盖为 false 使测试可运行（同 framework-web 先例） -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skip>false</skip>
+                    <systemPropertyVariables>
+                        <mysql.integration.required>${mysql.integration.required}</mysql.integration.required>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- 强制 MySQL 集成测试入口：激活本 profile 后，MySQL 不可用/凭据缺失/测试未执行将 FAIL 而非跳过（FW-MYSQL-DSN-CR-001 TC-01/02/03/05） -->
+        <profile>
+            <id>mysql-integration</id>
+            <properties>
+                <mysql.integration.required>true</mysql.integration.required>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>
