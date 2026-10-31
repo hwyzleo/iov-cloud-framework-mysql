@@ -1,7 +1,7 @@
 package net.hwyz.iov.cloud.framework.mysql.time;
 
 import com.alibaba.druid.pool.DruidDataSource;
-import net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler;
+import com.alibaba.druid.pool.DruidPooledConnection;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -435,37 +435,77 @@ class MysqlTimeMysqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("handler 双 JVM 往返经真实 MySQL 验证（修正 4：UTC 与 Asia/Shanghai 同结果）")
-    void handlerRoundTripUnderBothJvmZones() throws SQLException {
+    @DisplayName("物理连接替换：discard 后新物理连接 CONNECTION_ID() 不同且会话仍为 UTC（CR-002 AC-02）")
+    void physicalConnectionReplacedAndSessionStaysUtc() throws SQLException {
         requireMysql();
+        DruidDataSource ds = new DruidDataSource();
+        ds.setUrl(schemaUrl());
+        ds.setUsername(USER);
+        ds.setPassword(PASSWORD);
+        MysqlTimeProperties properties = new MysqlTimeProperties();
+        properties.setEnabled(true);
+        new MysqlDataSourceInitSqlPostProcessor(properties).postProcessAfterInitialization(ds, "dataSource");
+        long firstConnId;
+        try (Connection c1 = ds.getConnection()) {
+            firstConnId = connectionId(c1);
+            assertTrue(sessionIsUtc(c1), "合并初始化 SQL 后的首个物理连接会话必须为 UTC");
+            // 使物理连接真正失效：ds.discardConnection(DruidConnectionHolder) 直接关闭物理连接并标记不可回收；
+            // （ds.discardConnection(Connection) 对池化连接仅调用 close()=回收，不能保证新建物理连接）
+            if (c1 instanceof DruidPooledConnection druidConn) {
+                ds.discardConnection(druidConn.getConnectionHolder());
+            }
+        }
+        try (Connection c2 = ds.getConnection()) {
+            long secondConnId = connectionId(c2);
+            assertNotEquals(firstConnId, secondConnId,
+                    "discard 后必须建立新的物理连接（CONNECTION_ID() 前后不同，不能只验证同一连接借还）");
+            assertTrue(sessionIsUtc(c2),
+                    "替换后的新物理连接会话必须仍为 UTC（连接初始化 SQL 作用于每个新建/重连的物理连接，AC-02）");
+        } finally {
+            ds.close();
+        }
+    }
+
+    private static long connectionId(Connection c) throws SQLException {
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT CONNECTION_ID()")) {
+            assertTrue(rs.next());
+            return rs.getLong(1);
+        }
+    }
+
+    private static boolean sessionIsUtc(Connection c) throws SQLException {
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT @@session.time_zone")) {
+            assertTrue(rs.next());
+            return "+00:00".equals(rs.getString(1));
+        }
+    }
+
+    @Test
+    @DisplayName("handler 显式 codec：当前 JVM 时区下真实 MySQL 往返一致（UTC/上海用独立 JVM 分别执行，CR-002 AC-04）")
+    void codecRoundTripUnderCurrentJvmZone() throws SQLException {
+        requireMysql();
+        String jvmZone = java.util.TimeZone.getDefault().getID();
         Instant instant = Instant.parse("2026-10-30T08:00:00.123Z");
         try (Connection c = DriverManager.getConnection(schemaUrl(), USER, PASSWORD);
              Statement st = c.createStatement()) {
             st.execute("CREATE TABLE t_jvm (id BIGINT AUTO_INCREMENT PRIMARY KEY, occurred_at DATETIME(3) NULL)");
         }
-        java.util.TimeZone original = java.util.TimeZone.getDefault();
-        try {
-            for (String zone : new String[]{"UTC", "Asia/Shanghai"}) {
-                java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone(zone));
-                UtcInstantTypeHandler handler = new UtcInstantTypeHandler();
-                // 通过 JDBC 语句模拟 handler 的 setObject/getObject 调用路径（handler 逻辑本身由单元测试覆盖）
-                try (Connection c = DriverManager.getConnection(schemaUrl(), USER, PASSWORD)) {
-                    try (PreparedStatement ps = c.prepareStatement("DELETE FROM t_jvm");
-                         PreparedStatement ins = c.prepareStatement("INSERT INTO t_jvm (occurred_at) VALUES (?)")) {
-                        ps.executeUpdate();
-                        ins.setObject(1, LocalDateTime.ofInstant(instant, ZoneOffset.UTC));
-                        ins.executeUpdate();
-                    }
-                    try (PreparedStatement sel = c.prepareStatement("SELECT occurred_at FROM t_jvm");
-                         ResultSet rs = sel.executeQuery()) {
-                        assertTrue(rs.next(), "JVM 默认时区=" + zone + " 时 INSERT 后应能读回数据");
-                        Instant read = rs.getObject(1, LocalDateTime.class).toInstant(ZoneOffset.UTC);
-                        assertEquals(instant, read, "JVM 默认时区=" + zone + " 时 DATETIME(3) UTC 往返必须一致");
-                    }
-                }
+        try (Connection c = DriverManager.getConnection(schemaUrl(), USER, PASSWORD)) {
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM t_jvm");
+                 PreparedStatement ins = c.prepareStatement("INSERT INTO t_jvm (occurred_at) VALUES (?)")) {
+                ps.executeUpdate();
+                ins.setObject(1, LocalDateTime.ofInstant(instant, ZoneOffset.UTC));
+                ins.executeUpdate();
             }
-        } finally {
-            java.util.TimeZone.setDefault(original);
+            try (PreparedStatement sel = c.prepareStatement("SELECT occurred_at FROM t_jvm");
+                 ResultSet rs = sel.executeQuery()) {
+                assertTrue(rs.next(), "JVM 时区=" + jvmZone + " 时 INSERT 后应能读回数据");
+                Instant read = rs.getObject(1, LocalDateTime.class).toInstant(ZoneOffset.UTC);
+                assertEquals(instant, read,
+                        "JVM 时区=" + jvmZone + " 时 DATETIME(3) UTC 往返必须一致（显式 codec 与 JVM 默认时区无关）");
+            }
         }
     }
 }

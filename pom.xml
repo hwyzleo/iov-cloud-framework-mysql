@@ -46,9 +46,10 @@
             <groupId>org.freemarker</groupId>
             <artifactId>freemarker</artifactId>
         </dependency>
+        <!-- FW-MYSQL-DSN-CR-002：Boot 3 下 Druid 自动装配兼容性，替换为官方 druid-spring-boot-3-starter（版本由 Parent BOM 锁定） -->
         <dependency>
             <groupId>com.alibaba</groupId>
-            <artifactId>druid-spring-boot-starter</artifactId>
+            <artifactId>druid-spring-boot-3-starter</artifactId>
         </dependency>
 
         <!-- 数据库迁移：Flyway -->
