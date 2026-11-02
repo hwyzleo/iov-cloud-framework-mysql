@@ -1,3 +1,4 @@
 net.hwyz.iov.cloud.framework.mysql.config.MyBatisPlusConfig
 net.hwyz.iov.cloud.framework.mysql.config.MyBatisMetaObjectHandler
 net.hwyz.iov.cloud.framework.mysql.time.MysqlTimeAutoConfiguration
+net.hwyz.iov.cloud.framework.mysql.validation.MapperValidationAutoConfiguration

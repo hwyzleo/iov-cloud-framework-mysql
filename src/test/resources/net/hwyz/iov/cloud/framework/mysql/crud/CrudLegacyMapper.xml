@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  FW-MYSQL-DSN-CR-003 RG-01：代表性存量 BaseDao 十方法 XML（对齐存量服务真实写法，如 rsms）。
+  说明：
+  - updatePo 仅 row_version = row_version + 1 且 WHERE id（无版本条件）→ 旧 XML 的版本自增非 CAS（RD-03 事实依据）；
+  - logicalDeletePo 直接置 row_valid=0（@TableLogic 方向 true/1 有效）；
+  - selectPoByMap 为静态 row_valid=1 过滤（存量真实写法，map 键不参与动态条件）。
+-->
+<mapper namespace="net.hwyz.iov.cloud.framework.mysql.crud.CrudLegacyMapper">
+
+    <resultMap id="baseResultMap" type="net.hwyz.iov.cloud.framework.mysql.crud.CrudPo">
+        <id column="id" property="id"/>
+        <result column="code" property="code"/>
+        <result column="payload" property="payload"/>
+        <result column="description" property="description"/>
+        <result column="create_by" property="createBy"/>
+        <result column="create_time" property="createTime"/>
+        <result column="modify_by" property="modifyBy"/>
+        <result column="modify_time" property="modifyTime"/>
+        <result column="row_version" property="rowVersion"/>
+        <result column="row_valid" property="rowValid"/>
+    </resultMap>
+
+    <sql id="baseColumnList">
+        t.id, t.code, t.payload, t.description, t.create_by, t.create_time,
+        t.modify_by, t.modify_time, t.row_version, t.row_valid
+    </sql>
+
+    <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO t_cr003_crud (
+            code, payload, description, create_by, create_time, modify_by, modify_time, row_version, row_valid
+        )
+        VALUES (
+            #{code}, #{payload}, #{description}, #{createBy}, now(), #{modifyBy}, now(), 1, 1
+        )
+    </insert>
+
+    <insert id="batchInsertPo" useGeneratedKeys="true" keyProperty="id" parameterType="java.util.List">
+        INSERT INTO t_cr003_crud (
+            code, payload, description, create_by, create_time, modify_by, modify_time, row_version, row_valid
+        )
+        VALUES
+        <foreach collection="list" item="item" index="index" separator=",">
+        (
+            #{item.code}, #{item.payload}, #{item.description}, #{item.createBy}, now(),
+            #{item.modifyBy}, now(), 1, 1
+        )
+        </foreach>
+    </insert>
+
+    <update id="updatePo" parameterType="net.hwyz.iov.cloud.framework.mysql.crud.CrudPo">
+        UPDATE t_cr003_crud t SET
+        <if test="code != null and code != ''">
+            t.code = #{code},
+        </if>
+        <if test="payload != null and payload != ''">
+            t.payload = #{payload},
+        </if>
+        <if test="description != null and description != ''">
+            t.description = #{description},
+        </if>
+        <if test="modifyBy != null">
+            t.modify_by = #{modifyBy},
+        </if>
+        t.row_version = t.row_version + 1,
+        t.modify_time = now()
+        WHERE t.id = #{id}
+    </update>
+
+    <update id="logicalDeletePo" parameterType="Long">
+        UPDATE t_cr003_crud t SET
+        t.row_version = t.row_version + 1,
+        t.modify_time = now(),
+        t.row_valid = 0
+        WHERE t.id = #{value}
+    </update>
+
+    <delete id="physicalDeletePo" parameterType="Long">
+        DELETE FROM t_cr003_crud t
+        WHERE t.id = #{value}
+    </delete>
+
+    <delete id="batchPhysicalDeletePo" parameterType="Long">
+        DELETE FROM t_cr003_crud t
+        WHERE t.id IN
+        <foreach collection="array" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectPoById" parameterType="Long" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>
+        FROM t_cr003_crud t
+        WHERE t.id = #{value} AND t.row_valid = 1
+    </select>
+
+    <select id="selectPoByExample" parameterType="net.hwyz.iov.cloud.framework.mysql.crud.CrudPo" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>
+        FROM t_cr003_crud t
+        WHERE t.row_valid = 1
+        <if test="id != null">
+            AND t.id = #{id}
+        </if>
+        <if test="code != null and code != ''">
+            AND t.code = #{code}
+        </if>
+        <if test="payload != null and payload != ''">
+            AND t.payload = #{payload}
+        </if>
+        ORDER BY t.id DESC
+    </select>
+
+    <select id="selectPoByMap" parameterType="java.util.Map" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>
+        FROM t_cr003_crud t
+        WHERE t.row_valid = 1
+        <!-- 存量真实写法：map 键不参与动态条件（如 rsms VehicleGbMessageMapper），自定义条件按服务实际维护 -->
+        ORDER BY t.id DESC
+    </select>
+
+    <select id="countPoByMap" parameterType="java.util.Map" resultType="int">
+        SELECT COUNT(*)
+        FROM t_cr003_crud t
+        WHERE t.row_valid = 1
+    </select>
+
+</mapper>

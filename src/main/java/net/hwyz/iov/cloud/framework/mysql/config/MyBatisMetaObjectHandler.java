@@ -20,7 +20,9 @@ public class MyBatisMetaObjectHandler implements MetaObjectHandler {
         this.strictInsertFill(metaObject, "createTime", Date.class, new Date());
         this.strictInsertFill(metaObject, "modifyTime", Date.class, new Date());
         this.strictInsertFill(metaObject, "rowVersion", Integer.class, 1);
-        this.strictInsertFill(metaObject, "rowValid", Integer.class, 1);
+        // FW-MYSQL-DSN-CR-003 RD-04：rowValid 为 Boolean，必须用 Boolean.class 精确匹配（Integer.class 不匹配、实际从不填充）；
+        // strictFill 已有值不覆盖：显式 false 不被覆盖，也不强制设 true
+        this.strictInsertFill(metaObject, "rowValid", Boolean.class, Boolean.TRUE);
     }
 
     @Override
