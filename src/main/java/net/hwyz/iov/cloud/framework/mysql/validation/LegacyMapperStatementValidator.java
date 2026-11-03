@@ -58,6 +58,11 @@ public class LegacyMapperStatementValidator implements SmartInitializingSingleto
                 if (!BaseDao.class.isAssignableFrom(mapperClass)) {
                     continue;
                 }
+                // 框架自带契约类型（BaseDao 自身）不是业务 Mapper，由框架自身测试保证，
+                // 不参与业务校验（FW-MYSQL-DSN-CR-003 启动回归）。业务 Mapper 需逐方法校验。
+                if (mapperClass == BaseDao.class) {
+                    continue;
+                }
                 for (Method method : BaseDao.class.getDeclaredMethods()) {
                     if (Modifier.isStatic(method.getModifiers())) {
                         continue;

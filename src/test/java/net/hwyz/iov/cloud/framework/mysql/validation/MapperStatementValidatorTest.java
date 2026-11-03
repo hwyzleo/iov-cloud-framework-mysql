@@ -141,6 +141,17 @@ class MapperStatementValidatorTest {
     // ---------- 新标准 / 桥接 ----------
 
     @Test
+    @DisplayName("registry 混入框架自带类型（BaseDao/LegacyCrudBridgeMapper 被通配符扫描误注册）：fail 模式不误报（VIAM 启动事故回归）")
+    void frameworkOwnedTypesInRegistryAreSkipped() {
+        // 复现 VIAM 启动事故：@MapperScan("**.dao") 把框架 dao 包里的 BaseDao 与
+        // LegacyCrudBridgeMapper（泛型 <T> 不可解析）也注册进 MapperRegistry，
+        // 校验器应跳过框架类型，不将其当作缺失语句的业务 Mapper。
+        assertDoesNotThrow(() -> runBoth(
+                List.of(factoryWith(BaseDao.class, LegacyCrudBridgeMapper.class, SampleNativeMapper.class)),
+                MapperValidationMode.FAIL));
+    }
+
+    @Test
     @DisplayName("新标准 BaseMapper：MP 注入语句齐全，fail 模式通过")
     void nativeMapperPassesInFailMode() {
         assertDoesNotThrow(() -> runBoth(

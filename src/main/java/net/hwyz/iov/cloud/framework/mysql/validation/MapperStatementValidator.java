@@ -63,6 +63,12 @@ public class MapperStatementValidator implements SmartInitializingSingleton {
                 if (!BaseMapper.class.isAssignableFrom(mapperClass)) {
                     continue;
                 }
+                // 泛型不可解析：桥接/标记接口（如框架 LegacyCrudBridgeMapper<T>）不是
+                // 具体业务 Mapper，跳过（FW-MYSQL-DSN-CR-003 启动回归：VIAM 通配符扫描误注册）。
+                Class<?> entityClass = resolveEntityClass(mapperClass);
+                if (entityClass == null) {
+                    continue;
+                }
                 List<String> missing = new ArrayList<>();
                 String namespace = mapperClass.getName();
                 for (String statement : REQUIRED_MP_STATEMENTS) {
@@ -70,14 +76,11 @@ public class MapperStatementValidator implements SmartInitializingSingleton {
                         missing.add(statement);
                     }
                 }
-                Class<?> entityClass = resolveEntityClass(mapperClass);
-                if (entityClass != null) {
-                    TableInfo tableInfo = TableInfoHelper.getTableInfo(entityClass);
-                    if (tableInfo == null) {
-                        missing.add("PO 未解析 TableInfo（缺少 @TableName 或未注册）");
-                    } else if (tableInfo.getKeyProperty() == null || tableInfo.getKeyProperty().isBlank()) {
-                        missing.add("PO 未声明主键（@TableId）");
-                    }
+                TableInfo tableInfo = TableInfoHelper.getTableInfo(entityClass);
+                if (tableInfo == null) {
+                    missing.add("PO 未解析 TableInfo（缺少 @TableName 或未注册）");
+                } else if (tableInfo.getKeyProperty() == null || tableInfo.getKeyProperty().isBlank()) {
+                    missing.add("PO 未声明主键（@TableId）");
                 }
                 if (!missing.isEmpty()) {
                     issues.add("mapper=" + mapperClass.getName()
